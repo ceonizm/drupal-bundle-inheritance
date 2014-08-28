@@ -50,39 +50,56 @@ class BundleInheritanceController extends EntityAPIControllerExportable
      */
     public function getInheritanceChain ($bundle)
     {
-        $q = new EntityFieldQuery();
-        $result = $q->entityCondition('entity_type', BundleInheritanceRelation::EntityType)
-            ->propertyCondition('child', $bundle, "=")
-            ->execute();
-        if ($result && $result[BundleInheritanceRelation::EntityType]) {
-            $chain = array();
-            foreach ($result[BundleInheritanceRelation::EntityType] as $relation) {
-                $chain[] = $relation['parent'];
-                $parents = $this->getInheritance($relation['parent']);
-                if ($parents) {
-                    array_merge($parents, $chain);
+        $map =& drupal_static( __FUNCTION__);
+        if( !isset( $map ) ) $map = array();
+        if( !array_key_exists($bundle, $map) )
+        {   
+            $q = new EntityFieldQuery();
+            $result = $q->entityCondition('entity_type', BundleInheritanceRelation::EntityType)
+                ->propertyCondition('child', $bundle, "=")
+                ->execute();
+            if ($result && $result[BundleInheritanceRelation::EntityType]) {
+                $chain = array();
+                foreach ( $this->load( array_keys( $result[BundleInheritanceRelation::EntityType] ) ) as $relation) {
+                    $chain[] = $relation->parent;
+                    $parents = $this->getInheritanceChain($relation->parent);
+                    
+                    if ($parents) {
+                        $chain = array_merge($parents, $chain);
+                    }
                 }
+                $map[$bundle] = $chain;
+                return $chain;
             }
-            return $chain;
+            $map[$bundle] = NULL;
+            return NULL;
         }
-        return NULL;
+        return $map[$bundle];
     }
     
     public function getChilds( $parent )
     {
-        $q = new EntityFieldQuery();
-        $result = $q->entityCondition('entity_type', BundleInheritanceRelation::EntityType)
-        ->propertyCondition('parent', $parent, "=")
-        ->execute();
-        
-        if ($result && array_key_exists( BundleInheritanceRelation::EntityType, $result) ) {
-            $childs = array();
-            foreach( $this->load( array_keys( $result[BundleInheritanceRelation::EntityType] ) ) as $relation)
-            {
-                 $childs[] = $relation->child;
+        $map =& drupal_static( __FUNCTION__);
+        if( !isset( $map ) ) $map = array();
+        if( !array_key_exists($parent, $map) )
+        {
+            $q = new EntityFieldQuery();
+            $result = $q->entityCondition('entity_type', BundleInheritanceRelation::EntityType)
+            ->propertyCondition('parent', $parent, "=")
+            ->execute();
+            
+            if ($result && array_key_exists( BundleInheritanceRelation::EntityType, $result) ) {
+                $childs = array();
+                foreach( $this->load( array_keys( $result[BundleInheritanceRelation::EntityType] ) ) as $relation)
+                {
+                     $childs[] = $relation->child;
+                }
+                $map[$parent] = $childs;
+                return $childs;
             }
-            return $childs;
+            $map[$parent] = NULL;
+            return NULL;
         }
-        return NULL;
+        return $map[$parent];
     }
 }

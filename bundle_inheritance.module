@@ -37,7 +37,13 @@ function bundle_inheritance_entity_info_alter (&$entities)
             {
                 if( array_key_exists(BUNDLE_INHERIT_KEY, $bundle) )
                 {
-                    bundle_inheritance_do_inheritance($entityName, $bundle[BUNDLE_INHERIT_KEY], $bundleName );
+                    $module = NULL;
+                    if( $entityName == 'node')
+                    {
+                        $type = node_type_load($bundleName);
+                        $module = $type->module;
+                    }
+                    bundle_inheritance_do_inheritance($entityName, $bundle[BUNDLE_INHERIT_KEY], $bundleName, $module );
                 }
             }
         }
@@ -51,7 +57,7 @@ function bundle_inheritance_entity_info_alter (&$entities)
  * @param string $parent
  * @param string $child
  */
-function bundle_inheritance_do_inheritance ($entity_type, $parent, $child)
+function bundle_inheritance_do_inheritance ($entity_type, $parent, $child, $module = 'bundle_inheritance')
 {
     watchdog('debug', 'bundle_inheritance_do_inheritance between '.$parent.' and '.$child );
     $relation = new BundleInheritanceRelation();
@@ -71,6 +77,7 @@ function bundle_inheritance_do_inheritance ($entity_type, $parent, $child)
 
 function bundle_inheritance_break_inheritance($entity_type, $parent, $child)
 {
+    watchdog( "bundle_inheritance", "breaks inheritance link : " .$entity_type." :: ".$parent." :: ". $child );
     $ctrl = new BundleInheritanceController();
     $relations = $ctrl->load( FALSE, array( 'parent' => $parent, 'child' => $child) );
     $parentInstances = field_info_instances($entity_type, $parentBundle);
@@ -137,7 +144,6 @@ function bundle_inheritance_field_create_instance ($instance)
     if (! empty($chain)) {
         foreach ($chain as $bundle) {
             $newInstance = bundle_inheritance_prepare_instance($instance, $bundle);
-            dsm($newInstance);
             field_create_instance($newInstance);
         }
     }
@@ -155,6 +161,7 @@ function bundle_inheritance_field_create_instance ($instance)
  */
 function bundle_inheritance_field_update_instance ($instance, $prior_instance)
 {
+    $updateFlag =& drupal_static( __FUNCTION__.'flag' );
     $ctrl = new BundleInheritanceController(BundleInheritanceRelation::EntityType);
     $isOverrided = isset($instance['settings']['bundle_inheritance']) && $instance['settings']['bundle_inheritance']['modified'];
     
@@ -165,16 +172,33 @@ function bundle_inheritance_field_update_instance ($instance, $prior_instance)
             $existing = field_read_instance($instance['entity_type'], $instance['field_name'], $bundle);
             if (! $existing['settings']['bundle_inheritance']['modified']) {
                 $newInstance = bundle_inheritance_prepare_instance($instance, $bundle);
+                // we forbid the override check for the updated child 
+                $updateFlag = FALSE;
                 field_update_instance($newInstance);
+                $updateFlag = TRUE;
             }
         }
     } else {
-        if (! $isOverrided) {
+        if (! $isOverrided && $updateFlag) {
             // case of an inherited which is modified
             // so we flag it to modified
-            $instance['settings']['bundle_inheritance']['modified'] = TRUE;
-            $instance['label'] = str_replace(" [Inherited]", "", $instance['label'] );
-            field_update_instance($instance);
+            $diff = NULL;
+            $justWeight = FALSE;
+            if( is_array( $instance) && is_array( $prior_instance ) )
+            {
+                $diff = array_diff_assoc_recursive( $instance, $prior_instance);
+                dsm( $diff, "diff");
+                if( is_array($diff) && array_keys( $diff ) == array( 'widget') && array_keys( $diff['widget']) == array( 'weight') )
+                {
+                    $justWeight = TRUE;
+                }
+            }
+
+            if( !$justWeight ) {
+                $instance['settings']['bundle_inheritance']['modified'] = TRUE;
+                $instance['label'] = str_replace(" [Inherited]", "", $instance['label'] );
+                field_update_instance($instance);
+            }
         }
     }
 }
@@ -223,4 +247,58 @@ function bundle_inheritance_module_implements_alter (&$implementations, $hook)
     }
 }
 
+
+function bundle_inheritance_node_type_delete( $info )
+{
+    watchdog( 'bundle_inheritance', "deleted content type : ".$info->type );
+    $ctrl = new BundleInheritanceController(BundleInheritanceRelation::EntityType);
+    $chain = $ctrl->getInheritanceChain( $info->type );
+    if( !is_null( $chain ) )
+    {
+        foreach( $chain as $bundle)
+        {
+            bundle_inheritance_break_inheritance( 'node',  $bundle, $info->type);
+        }
+    }
+    $chain = $ctrl->getChilds( $info->type );
+    if( !is_null( $chain ) )
+    {
+        foreach( $chain as $bundle)
+        {
+            bundle_inheritance_break_inheritance( 'node', $info->type, $bundle);
+        }
+    }
+}
+
+function array_diff_assoc_recursive($array1, $array2)
+{
+    $difference = NULL;
+    foreach($array1 as $key => $value)
+    {
+        if(is_array($value))
+        {
+            if(!array_key_exists($key, $array2))
+            {
+                $difference[$key] = $value;
+            }
+            elseif(!is_array($array2[$key]))
+            {
+                $difference[$key] = $value;
+            }
+            else
+            {
+                $new_diff = array_diff_assoc_recursive($value, $array2[$key]);
+                if($new_diff != FALSE)
+                {
+                    $difference[$key] = $new_diff;
+                }
+            }
+        }
+        elseif(!array_key_exists($key, $array2) || $array2[$key] != $value)
+        {
+            $difference[$key] = $value;
+        }
+    }
+    return !isset($difference) ? 0 : $difference;
+}
 ?>
