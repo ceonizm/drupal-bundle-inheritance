@@ -1,0 +1,71 @@
+<?php
+
+/**
+ * implementation of hook_schema
+ */
+function bundle_inheritance_schema( )
+{
+    $schema = array();
+    
+    $schema['bundle_inheritances'] = array(
+        'primary key' => array(
+            'id'
+        ),
+        'fields' => array(
+            'id' => array(
+                // 'description' => 'The primary identifier',
+                'type' => 'serial',
+                'unsigned' => TRUE,
+                'not null' => TRUE
+            ),
+            'label' => array(
+                // 'description' => 'The segment name',
+                'type' => 'varchar',
+                'length' => '255',
+                'not null' => TRUE,
+                'default' => 'inheritance'
+            ),
+            'bundle' => array(
+                // 'description' => 'The name of the shape',
+                'type' => 'varchar',
+                'length' => '255',
+                'not null' => TRUE
+            ),
+            'parent' => array(
+                // 'description' => 'The name of the shape',
+                'type' => 'varchar',
+                'length' => '255',
+                'not null' => TRUE
+            ),
+            'child' => array(
+                // 'description' => 'The name of the shape',
+                'type' => 'varchar',
+                'length' => '255',
+                'not null' => TRUE
+            ),
+            'entity_type' => array(
+                // 'description' => 'The name of the shape',
+                'type' => 'varchar',
+                'length' => '255',
+                'not null' => TRUE
+            ),
+            'status' => array(
+                'type' => 'int',
+                'not null' => true,
+                'default' => 0x01,
+                'size' => 'tiny',
+                'description' => 'The exportable status of the entity.'
+            ),
+            'module' => array(
+                'description' => 'The name of the providing module if the entity has been defined in code.',
+                'type' => 'varchar',
+                'length' => 255,
+                'not null' => FALSE,
+            ),
+        )
+    );
+    
+    return $schema;
+}
+
+?>

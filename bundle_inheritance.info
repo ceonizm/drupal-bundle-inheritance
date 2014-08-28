@@ -1,0 +1,9 @@
+name = Bundle Inheritance
+description = this module allows to inherit a bundle
+core = 7.x
+package = Viadirect Evol2013
+
+files[] = includes/bundle_inheritance.controller.inc
+
+dependencies[] = field
+dependencies[] = entity
